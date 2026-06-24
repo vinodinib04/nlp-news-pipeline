@@ -655,8 +655,16 @@ Governance implemented:
 The architecture can be directly integrated with Microsoft Purview Data Map and sensitivity labels in an enterprise environment without requiring pipeline changes.
 
 ---
+## Limitations
 
+This project was developed using Azure for Students.
 
+The following components are included in the architecture design but not fully implemented due to subscription limitations:
+- Azure API Management
+- Microsoft Purview
+
+Equivalent functionality is demonstrated using Azure Functions and documented architecture diagrams.
+---
 ## Security & Privacy
 
 The pipeline follows security best practices:
