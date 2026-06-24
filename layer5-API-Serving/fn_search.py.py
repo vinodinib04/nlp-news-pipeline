@@ -103,7 +103,4 @@ def fn_search(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500
         )
 
-SEARCH_ENDPOINT = "https://vinodini-nlp-search.search.windows.net"
-SEARCH_KEY = "DYefpwTy3p1YgoGVVPgFvsjWcP6fH3KYVjaHb34gzFAzSeA2dXRf"
-INDEX_NAME = "nlp-articles"
 
