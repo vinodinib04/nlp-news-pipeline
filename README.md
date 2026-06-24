@@ -231,6 +231,161 @@ silver/ → Databricks Notebook → gold/ Delta tables → ADF schedule trigger
 | embedding | Vector | Yes (HNSW) | Semantic search |
 | contains_pii | Boolean | No | Governance filter |
 
+---
+
+## Layer 5 — API Serving
+
+### Objective
+
+Expose NLP-enriched news articles through a lightweight REST API that enables external applications to perform keyword and semantic search.
+
+### What was built
+
+- Azure Function (`fn_search`) with HTTP Trigger
+- Integrated with Azure AI Search
+- Accepts query parameter:
+
+```
+GET /api/v1/search?q=technology
+```
+
+- Returns structured JSON responses
+- Supports full-text search over indexed news articles
+
+### API Flow
+
+```
+Client / Browser
+        │
+HTTP GET /api/v1/search?q=technology
+        │
+        ▼
+Azure Function (fn_search)
+        │
+        ▼
+Azure AI Search
+        │
+        ▼
+Search Index (nlp-articles)
+        │
+        ▼
+JSON Response
+```
+
+### Sample Request
+
+```
+GET /api/v1/search?q=technology
+```
+
+### Sample Response
+
+```json
+{
+  "query": "technology",
+  "count": 5,
+  "results": [
+    {
+      "title": "AI transforms healthcare",
+      "category": "Technology",
+      "sentiment": "positive"
+    }
+  ]
+}
+```
+### Design Decisions
+
+- Azure Functions chosen for serverless API hosting
+- Stateless HTTP endpoint enables automatic scaling
+- Azure AI Search performs keyword and semantic retrieval
+- Function-level authorization used for development
+- Azure API Management / Azure AD Easy Auth can be added for OAuth authentication, response caching, and rate limiting in production
+
+---
+
+
+
+## Layer 6 — Governance & Lineage
+
+### Objective
+
+Provide end-to-end data lineage, governance, and privacy-aware processing across the NLP pipeline.
+
+### Architecture
+
+```
+NewsAPI
+    │
+    ▼
+Logic Apps
+    │
+    ▼
+Raw Layer (ADLS Gen2)
+    │
+    ▼
+Azure Functions
+    │
+    ▼
+Azure AI Language + Azure OpenAI
+    │
+    ▼
+Silver Layer (ADLS Gen2)
+    │
+    ▼
+Azure Databricks
+    │
+    ▼
+Gold Layer (Delta Tables)
+    │
+    ▼
+Azure AI Search
+    │
+    ▼
+Search API
+```
+
+### Governance Features
+
+- Medallion Architecture (Raw → Silver → Gold)
+- Duplicate detection using `url_hash`
+- PII detection during NLP enrichment
+- Immutable Raw storage for auditability
+- Delta tables for reliable analytics
+- Documented end-to-end lineage
+
+
+### Lineage
+
+```
+NewsAPI
+   │
+Logic Apps
+   │
+Raw Layer
+   │
+Azure Functions
+   │
+Silver Layer
+   │
+Databricks
+   │
+Gold Layer
+   │
+Azure AI Search
+   │
+Search API
+```
+
+### Design Decisions
+
+- Medallion Architecture separates raw, enriched, and analytical datasets
+- `url_hash` ensures idempotent processing and duplicate elimination
+- PII detection is integrated into the enrichment stage instead of post-processing
+- Governance is implemented through documented lineage and metadata
+- The architecture is fully compatible with Microsoft Purview for future enterprise deployment without requiring additional code changes
+
+---
+
 ## How to Run
 
 ### Prerequisites
@@ -295,25 +450,27 @@ DATABRICKS_JOB_ID=your_job_id
 4. Fill in values in create_index.py
 5. Run: python layer4-search/create_index.py
 
-## Design Decisions
+ ### Layer 5 — API Serving  
+#### How to Run
 
-### Why Event Grid over Event Hub for Layer 1→2 trigger?
-Event Grid fires on discrete blob-created events — exactly what is needed here. Event Hub is designed for high-throughput continuous streams (millions of events/sec). Since NewsAPI delivers at most 100 articles every 6 hours per category, Event Grid is the correct, cost-effective choice.
+```
+pip install -r requirements.txt
+func start
+```
 
-### Why batch size of 25 for Language API calls?
-Azure AI Language API accepts a maximum of 25 documents per batch request. Processing in batches of 25 maximises throughput while staying within API limits.
+Open
 
-### Why MERGE instead of overwrite for gold Delta tables?
-If ADF triggers Databricks twice in one day (re-run, failure retry), MERGE updates existing rows instead of creating duplicates. This makes the pipeline idempotent — safe to re-run at any time without corrupting analytics data.
+```
+http://localhost:7071/api/v1/search?q=technology
+```
 
-### Why url_hash for deduplication?
-The same article can appear in multiple NewsAPI calls (if it stays trending). MD5 of the URL gives a stable, consistent identifier checked against the audit table before enrichment — skipping already-processed articles without reading their content.
+or deploy to Azure Functions and access
 
-### Why Azure AD Easy Auth instead of Azure API Management (Layer 5)?
-APIM Developer tier costs ~$50/month — not viable for a student account. Azure AD Easy Auth is free, built into Azure Functions, and provides the same JWT token validation at the platform level before any code executes.
+```
+https://<function-app>.azurewebsites.net/api/v1/search?q=technology
+```
 
-### Why Databricks Free Edition / Azure Databricks over Synapse?
-The project document specifically names Databricks. Azure Databricks was used (Standard tier, single-node cluster) to match the exact architecture specified, with auto-termination set to 15 minutes to minimise cost.
+
 
 ---
 
@@ -332,52 +489,3 @@ Resources created:
 - Azure Data Factory — `nlp-adf`
 - Azure AI Search — Free tier (F)
 
----
-
-## Repository Structure
-
-```
-nlp-pipeline-project/
-├── README.md
-├── .gitignore
-├── config/
-│   └── sample.env
-├── architecture_diagram.png
-├── layer1-ingestion/
-│   ├── logic_app_definition.json
-│   └── samples/
-│       └── sample_raw_response.json
-├── layer2-enrichment/
-│   ├── function_app.py
-│   ├── requirements.txt
-│   ├── host.json
-│   ├── sample.local.settings.json
-│   └── samples/
-│       ├── sample_input.json
-│       └── sample_output.json
-├── layer3-orchestration/
-│   ├── gold_layer_pipeline.ipynb
-│   ├── adf_pipeline.json
-│   └── samples/
-│       ├── sample_gold_sentiment.json
-│       ├── sample_gold_entities.json
-│       ├── sample_gold_keywords.json
-│       └── databricks_output_screenshot.png
-├── layer4-search/
-│   ├── create_index.py
-│   ├── search_index_schema.json
-│   └── samples/
-│       └── sample_search_response.json
-├── layer5-api/
-│   └── fn_search_code.py
-└── layer6-governance/
-    └── lineage_diagram.png
-```
-
----
-
-## Candidate
-
-**Name:** Vinodini Bandaru
-**Role:** Intern Data Engineer Support
-**Submission:** Text NLP Pipeline (Project 2 — Mandatory)
