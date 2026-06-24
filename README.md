@@ -474,6 +474,214 @@ https://<function-app>.azurewebsites.net/api/v1/search?q=technology
 
 ---
 
+
+
+
+---
+
+# Design Decisions
+
+## Why Event Grid instead of Event Hub?
+
+The pipeline is event-driven and processes files whenever a new blob is created in Azure Data Lake Storage Gen2. Azure Event Grid provides lightweight, low-latency notifications and integrates directly with Azure Functions. Event Hub is designed for high-throughput streaming scenarios and would introduce unnecessary complexity for periodic NewsAPI ingestion.
+
+---
+
+## Why process Azure AI Language requests in batches?
+
+Azure AI Language Service supports processing multiple documents in a single request. Batch processing reduces API calls, improves throughput, and optimizes overall pipeline performance while remaining within service limits.
+
+---
+
+## Why use `url_hash` for deduplication?
+
+NewsAPI may return the same article across multiple executions or categories. A stable MD5 hash generated from the article URL provides a unique identifier that allows duplicate articles to be detected and skipped without comparing the entire document content.
+
+```
+url_hash = MD5(article.url)
+```
+
+This makes the pipeline idempotent and prevents duplicate processing.
+
+---
+
+## Why Medallion Architecture (Raw → Silver → Gold)?
+
+The Medallion Architecture separates data according to its processing stage.
+
+**Raw Layer**
+
+- Stores original NewsAPI responses
+- Preserves immutable source data
+
+**Silver Layer**
+
+- Stores NLP-enriched articles
+- Improves data quality and consistency
+
+**Gold Layer**
+
+- Stores business-ready analytical datasets
+- Optimized for reporting and downstream applications
+
+This architecture improves maintainability, governance, and traceability.
+
+---
+
+## Why Azure Functions?
+
+Azure Functions provide a serverless execution model with automatic scaling and pay-per-execution pricing.
+
+Benefits include:
+
+- Event-driven execution
+- Low operational overhead
+- Automatic scaling
+- Easy integration with Event Grid and Azure AI services
+
+---
+
+## Why Azure AI Language Service?
+
+Azure AI Language Service provides pre-trained NLP capabilities without requiring custom model training.
+
+Features used:
+
+- Sentiment Analysis
+- Named Entity Recognition
+- Key Phrase Extraction
+- PII Detection
+
+This enables rapid implementation while maintaining enterprise-grade accuracy.
+
+---
+
+## Why generate vector embeddings?
+
+Vector embeddings convert article content into numerical representations that capture semantic meaning.
+
+Benefits:
+
+- Semantic Search
+- Hybrid Search
+- Similarity Matching
+- Future Machine Learning applications
+
+Embeddings make the search system more intelligent than traditional keyword-based retrieval.
+
+---
+
+## Why Azure Databricks?
+
+Azure Databricks provides distributed data processing using Apache Spark and Delta Lake.
+
+It enables:
+
+- Large-scale transformations
+- Efficient aggregations
+- Incremental processing
+- Reliable analytics pipelines
+
+---
+
+## Why MERGE instead of overwrite for Gold tables?
+
+Delta Lake MERGE operations update existing records instead of replacing the entire dataset.
+
+Advantages:
+
+- Prevents duplicate rows
+- Supports incremental updates
+- Safe pipeline re-execution
+- Idempotent data processing
+
+---
+
+## Why Azure AI Search?
+
+Azure AI Search combines keyword search with semantic ranking and vector capabilities.
+
+The implementation supports:
+
+- Full-text search
+- Semantic ranking
+- Metadata filtering
+- Vector-ready architecture
+
+making it suitable for intelligent retrieval of NLP-enriched articles.
+
+---
+
+## Why Azure Data Factory?
+
+Azure Data Factory orchestrates the nightly analytics workflow.
+
+Responsibilities include:
+
+- Triggering Databricks notebooks
+- Managing execution order
+- Scheduling batch jobs
+- Automating end-to-end processing
+
+---
+
+## Why Azure Logic Apps?
+
+Azure Logic Apps provide a low-code integration platform for periodic data ingestion.
+
+They simplify:
+
+- HTTP API integration
+- Scheduled execution
+- Workflow automation
+- Cloud-native orchestration
+
+without requiring custom infrastructure.
+
+---
+
+## Why document governance instead of fully implementing Microsoft Purview?
+
+The project follows Purview-compatible governance principles while remaining compatible with Azure Student resources.
+
+Governance implemented:
+
+- Medallion Architecture
+- End-to-end documented lineage
+- PII detection metadata
+- Immutable Raw storage
+- Data traceability
+
+The architecture can be directly integrated with Microsoft Purview Data Map and sensitivity labels in an enterprise environment without requiring pipeline changes.
+
+---
+
+
+## Security & Privacy
+
+The pipeline follows security best practices:
+
+- Environment variables for secrets
+- No credentials stored in source code
+- Duplicate detection using `url_hash`
+- PII identification using Azure AI Language
+- Layered storage architecture for controlled data access
+
+---
+
+## Future Enhancements
+
+- Azure API Management for OAuth authentication and rate limiting
+- Microsoft Purview Data Map integration
+- Automated sensitivity labels
+- Hybrid vector + semantic search
+- MLflow model version tracking
+- Real-time streaming analytics
+- Power BI dashboards
+- CI/CD deployment using GitHub Actions
+
+---
+
 ## Infrastructure
 
 All Azure resources were provisioned via Azure Portal. Exported ARM templates are included under `infra/exported-templates/` for reproducibility.
