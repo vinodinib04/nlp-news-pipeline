@@ -119,7 +119,7 @@ contains_pii = false (otherwise)
 
 ### Error handling
 - Batches processed in groups of 5
-- Each batch retried once on failure — skipped if still failing
+- Each batch retried once on failure skipped if still failing
 - Skipped articles remain unmarked in audit table → automatically retried next run
 - Per-article embedding failure isolation — one failure does not stop the batch
 
@@ -207,6 +207,29 @@ silver/ → Databricks Notebook → gold/ Delta tables → ADF schedule trigger
 - `layer3-batch-orchestration/outputs/
 
 ---
+## Layer 4 — Azure AI Search
+
+### What was built
+- Azure AI Search resource (Free tier F)
+- Hybrid search index with:
+  - BM25 keyword search on title, description, content, entities, keyphrases
+  - HNSW vector search on 1536-dim embeddings (text-embedding-ada-002)
+  - Semantic ranker using nlp-semantic-config
+- Indexer reads from silver/articles/ container
+- JSON array parsing mode — matches enriched article file format
+
+### Index fields
+| Field | Type | Searchable | Purpose |
+|---|---|---|---|
+| id (url_hash) | String | No | Unique key, dedup |
+| title | String | Yes (BM25) | Main search field |
+| description | String | Yes (BM25) | Secondary search |
+| category | String | No | Filter/facet |
+| sentiment | String | No | Filter |
+| entities | Collection | Yes (BM25) | Entity search |
+| keyphrases | Collection | Yes (BM25) | Keyword search |
+| embedding | Vector | Yes (HNSW) | Semantic search |
+| contains_pii | Boolean | No | Governance filter |
 
 ## How to Run
 
@@ -264,6 +287,13 @@ DATABRICKS_JOB_ID=your_job_id
 ```
 
 ---
+### Layer 4 — Azure AI Search
+
+1. Install: pip install azure-search-documents azure-core
+2. Get Search admin key from Portal → vinodini-nlp-search → Keys
+3. Get Storage connection string from Portal → vinodininlpstorage → Access keys
+4. Fill in values in create_index.py
+5. Run: python layer4-search/create_index.py
 
 ## Design Decisions
 
