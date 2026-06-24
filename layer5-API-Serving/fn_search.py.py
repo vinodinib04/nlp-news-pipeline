@@ -8,9 +8,9 @@ import json
 app = func.FunctionApp()
 SEARCH_ENDPOINT = os.environ.get("SEARCH_ENDPOINT")
 SEARCH_KEY      = os.environ.get("SEARCH_KEY")
-SEARCH_INDEX    = "nlp-articles"
+SEARCH_INDEX    = "<search index>"
 
-# Simple in-memory cache (replaces APIM response caching)
+
 _cache = {}
 CACHE_TTL_SECONDS = 60
 
@@ -21,10 +21,10 @@ def fn_search(req: func.HttpRequest) -> func.HttpResponse:
     from azure.search.documents.models import VectorizedQuery
     from azure.core.credentials import AzureKeyCredential
 
-    # ---- Rate limiting (replaces APIM rate limiting) ----
+   
     client_ip = req.headers.get("X-Forwarded-For", "unknown")
     
-    # ---- Get query parameter ----
+ 
     query = req.params.get("q")
     if not query:
         return func.HttpResponse(
@@ -33,7 +33,7 @@ def fn_search(req: func.HttpRequest) -> func.HttpResponse:
             status_code=400
         )
 
-    # ---- Check cache first (replaces APIM caching) ----
+ 
     cache_key = query.lower().strip()
     now = time.time()
     if cache_key in _cache:
@@ -53,7 +53,7 @@ def fn_search(req: func.HttpRequest) -> func.HttpResponse:
             credential=AzureKeyCredential(SEARCH_KEY)
         )
 
-        # ---- Hybrid search: keyword + vector ----
+   
         results = search_client.search(
             search_text=query,
             top=10,
